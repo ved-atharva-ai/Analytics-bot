@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+pandas
+openpyxl
+matplotlib
+seaborn
+google-generativeai
+psycopg2-binary
+sqlalchemy
+python-dotenv
+mcp
+httpx
