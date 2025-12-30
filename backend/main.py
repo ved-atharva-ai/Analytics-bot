@@ -64,6 +64,103 @@ tools_openai_format = [
     {
         "type": "function",
         "function": {
+            "name": "generate_dashboard",
+            "description": "Generate multiple charts at once. Use this when user asks for multiple charts or comparisons across different dimensions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chart_specs": {
+                        "type": "array",
+                        "description": "List of chart specifications",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "chart_type": {
+                                    "type": "string",
+                                    "enum": ["bar", "line", "scatter", "pie", "area"],
+                                    "description": "Type of chart"
+                                },
+                                "x_column": {
+                                    "type": "string",
+                                    "description": "Column for X-axis"
+                                },
+                                "y_column": {
+                                    "type": "string",
+                                    "description": "Column for Y-axis (optional)"
+                                },
+                                "title": {
+                                    "type": "string",
+                                    "description": "Chart title"
+                                },
+                                "aggregation": {
+                                    "type": "string",
+                                    "enum": ["count", "sum", "mean", "median", "min", "max"],
+                                    "description": "Aggregation function"
+                                }
+                            },
+                            "required": ["chart_type", "x_column", "title"]
+                        }
+                    }
+                },
+                "required": ["chart_specs"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_chart_data",
+            "description": "Generate chart configuration and data for interactive frontend rendering. Returns structured JSON with chart data instead of static images. Use this for modern dashboard responses.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chart_type": {
+                        "type": "string",
+                        "enum": ["bar", "line", "scatter", "pie", "area"],
+                        "description": "Type of chart to create"
+                    },
+                    "x_column": {
+                        "type": "string",
+                        "description": "Column name for X-axis"
+                    },
+                    "y_column": {
+                        "type": "string",
+                        "description": "Column name for Y-axis (optional for pie charts)"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Chart title",
+                        "default": "Chart"
+                    },
+                    "filename": {
+                        "type": "string",
+                        "description": "Data file to use (defaults to active file)"
+                    },
+                    "filter_column": {
+                        "type": "string",
+                        "description": "Column to filter on (optional)"
+                    },
+                    "filter_value": {
+                        "type": "string",
+                        "description": "Value to filter for (optional)"
+                    },
+                    "aggregation": {
+                        "type": "string",
+                        "enum": ["count", "sum", "mean", "median", "min", "max"],
+                        "description": "Aggregation function (optional)"
+                    },
+                    "group_by": {
+                        "type": "string",
+                        "description": "Column to group by before aggregation (optional)"
+                    }
+                },
+                "required": ["chart_type"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_visualization",
             "description": "Create various types of charts and visualizations from data. Supports filtering, grouping, and aggregations.",
             "parameters": {
@@ -113,6 +210,7 @@ tools_openai_format = [
             }
         }
     },
+
     {
         "type": "function",
         "function": {
@@ -164,8 +262,11 @@ class ChatRequest(BaseModel):
     role: str = "admin"
 
 class ChatResponse(BaseModel):
-    response: str
+    response_type: str = "text"  # 'text' or 'analytics'
+    response: str = ""
     image_url: Optional[str] = None
+    dashboard_data: Optional[dict] = None  # For analytics responses
+
 
 # Routes
 @app.post("/upload")
@@ -228,33 +329,32 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         import tools
         files_info = f"Available data files: {list(tools.dataframes.keys())}. Active file: {tools.active_file}" if tools.dataframes else "No data files loaded yet."
         
-        system_instruction = f"""You are a PROACTIVE data analyst assistant. {files_info}
+        system_instruction = f"""You are a data visualization assistant. {files_info}
 
-CRITICAL RULES - YOU MUST FOLLOW THESE:
-1. **NEVER** write fake image paths like ![Chart](/static/something.png) in your response
-2. **ONLY** include image markdown that was returned by the create_visualization tool
-3. If you want to show a chart, you MUST call the create_visualization function first
-4. Wait for the tool to return the actual image path, then include that exact path in your response
-5. DO NOT make up or invent image filenames - only use what the tool returns
+TOOLS AVAILABLE:
+1. generate_dashboard - Use for MULTIPLE charts (when user wants 2+ charts)
+2. generate_chart_data - Use for SINGLE chart
 
-DATA ACCESS:
-- Available files: {list(tools.dataframes.keys()) if tools.dataframes else 'None'}
-- Active file: {tools.active_file if tools.active_file else 'None'}
-- If user doesn't specify a file, use the Active file
+RULES:
+- Multiple charts requested? → Use generate_dashboard
+- Single chart? → Use generate_chart_data  
+- DO NOT describe tools, CALL them
+- Response: just say "." after calling tools
 
-VISUALIZATION REQUIREMENTS:
-- For comparisons, trends, distributions, or data analysis → CALL create_visualization tool
-- Available chart types: bar, line, scatter, hist, pie, box, violin, heatmap, area, count
+EXAMPLES:
 
-KNOWLEDGE BASE (RAG):
-- For questions about text content, policies, definitions, or general information contained in uploaded PDFs → CALL query_knowledge_base tool
-- Do NOT try to answer from your own training data if the answer might be in the uploaded documents.
+Q: "compare students by school, gender, and age"
+A: Call generate_dashboard with chart_specs=[
+  {{"chart_type":"bar", "x_column":"school", "title":"Students by School", "aggregation":"count"}},
+  {{"chart_type":"pie", "x_column":"sex", "title":"Students by Gender", "aggregation":"count"}},
+  {{"chart_type":"bar", "x_column":"age", "title":"Students by Age", "aggregation":"count"}}
+]
+Then respond: "."
 
-RESPONSE FORMAT:
-- First call the tool (if visualization or info needed)
-- Then write your analysis
-- Include the EXACT image markdown returned by the tool (e.g., ![Chart](/static/charts/uuid.png))
-- Never reference images that don't exist"""
+Q: "show students by school"
+A: Call generate_chart_data with chart_type='bar', x_column='school', aggregation='count', title='Students by School'
+Then respond: "."
+"""
         
         messages.append({"role": "system", "content": system_instruction})
         
@@ -294,7 +394,13 @@ RESPONSE FORMAT:
                     print(f"[TOOL CALL] {function_name} with args: {function_args}")
                     
                     # Execute the function
-                    if function_name == "create_visualization":
+                    if function_name == "generate_dashboard":
+                        from tools import generate_dashboard
+                        function_response = generate_dashboard(**function_args)
+                    elif function_name == "generate_chart_data":
+                        from tools import generate_chart_data
+                        function_response = generate_chart_data(**function_args)
+                    elif function_name == "create_visualization":
                         from tools import create_visualization
                         function_response = create_visualization(**function_args)
                     elif function_name == "get_data_summary":
@@ -324,6 +430,82 @@ RESPONSE FORMAT:
                     stream=False
                 )
                 response_text = second_response.choices[0].message.content
+                
+                # Transform response if generate_chart_data or generate_dashboard was called
+                has_chart_data = any(tc.function.name in ["generate_chart_data", "generate_dashboard"] for tc in tool_calls)
+                
+                if has_chart_data:
+                    # Build structured dashboard response
+                    charts = []
+                    kpis = []
+                    
+                    # Extract chart data from tool responses
+                    for i, tool_call in enumerate(tool_calls):
+                        if tool_call.function.name == "generate_dashboard":
+                            # Handle dashboard response (multiple charts in one response)
+                            for msg in messages:
+                                if isinstance(msg, dict):
+                                    msg_role = msg.get("role")
+                                    msg_tool_call_id = msg.get("tool_call_id")
+                                else:
+                                    msg_role = getattr(msg, "role", None)
+                                    msg_tool_call_id = getattr(msg, "tool_call_id", None)
+                                
+                                if msg_role == "tool" and msg_tool_call_id == tool_call.id:
+                                    try:
+                                        content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
+                                        dashboard_data = json.loads(content)
+                                        if "charts" in dashboard_data:
+                                            charts.extend(dashboard_data["charts"])
+                                    except Exception as e:
+                                        print(f"[ERROR] Failed to parse dashboard: {e}")
+                        
+                        elif tool_call.function.name == "generate_chart_data":
+                            # Find the corresponding tool response
+                            for msg in messages:
+                                # Handle both dict and object types
+                                if isinstance(msg, dict):
+                                    msg_role = msg.get("role")
+                                    msg_tool_call_id = msg.get("tool_call_id")
+                                else:
+                                    msg_role = getattr(msg, "role", None)
+                                    msg_tool_call_id = getattr(msg, "tool_call_id", None)
+                                
+                                if msg_role == "tool" and msg_tool_call_id == tool_call.id:
+                                    try:
+                                        # Get content from dict or object
+                                        content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
+                                        chart_config = json.loads(content)
+                                        if "error" not in chart_config:
+                                            charts.append(chart_config)
+                                    except Exception as e:
+                                        print(f"[ERROR] Failed to parse chart config: {e}")
+                                        pass
+                    
+                    # Build dashboard response
+                    dashboard_data = {
+                        "type": "analytics_response",
+                        "text": response_text or "Here's your analysis:",
+                        "charts": charts,
+                        "kpis": kpis,  # Could extract from response_text if needed
+                        "tables": []
+                    }
+                    
+                    # Save to database with special marker
+                    model_msg = ChatMessage(
+                        role="model",
+                        content=json.dumps(dashboard_data),
+                        user_role=request.role
+                    )
+                    db.add(model_msg)
+                    db.commit()
+                    
+                    return ChatResponse(
+                        response_type="analytics",
+                        response=response_text,
+                        dashboard_data=dashboard_data
+                    )
+
             else:
                 response_text = response_message.content
             

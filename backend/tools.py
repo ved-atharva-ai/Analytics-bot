@@ -129,6 +129,129 @@ def get_data_json(filename: str = None):
         }
     return None
 
+def generate_chart_data(
+    chart_type: str,
+    x_column: str = None,
+    y_column: str = None,
+    title: str = "Chart",
+    filename: str = None,
+    filter_column: str = None,
+    filter_value: str = None,
+    aggregation: str = None,
+    group_by: str = None
+):
+    """
+    Generate chart configuration and data for frontend rendering.
+    Returns structured JSON instead of creating a PNG image.
+    
+    Args:
+        chart_type: Type of chart - 'bar', 'line', 'scatter', 'pie', 'area'
+        x_column: Column for X-axis
+        y_column: Column for Y-axis (optional for some charts)
+        title: Chart title
+        filename: Data file to use (defaults to active file)
+        filter_column: Column to filter on (optional)
+        filter_value: Value to filter for (optional)
+        aggregation: Aggregation function - 'count', 'sum', 'mean', 'median', 'min', 'max' (optional)
+        group_by: Column to group by before aggregation (optional)
+    
+    Returns:
+        JSON string with chart configuration and data
+    """
+    print(f"[TOOL CALLED] generate_chart_data: type={chart_type}, x={x_column}, y={y_column}, filter={filter_column}={filter_value}, agg={aggregation}, group={group_by}")
+    
+    global dataframes, active_file
+    target_file = filename or active_file
+    
+    if not target_file or target_file not in dataframes:
+        return json.dumps({"error": "No data loaded or file not found."})
+
+    df = dataframes[target_file].copy()
+    
+    try:
+        # Apply filter if specified
+        if filter_column and filter_value:
+            df = df[df[filter_column] == filter_value]
+            print(f"[FILTER] Filtered {len(df)} rows where {filter_column}={filter_value}")
+        
+        # Handle aggregations
+        if aggregation and group_by:
+            if aggregation == 'count':
+                plot_data = df.groupby(group_by).size().reset_index(name='count')
+                x_column = group_by
+                y_column = 'count'
+            else:
+                plot_data = df.groupby(group_by)[y_column].agg(aggregation).reset_index()
+                x_column = group_by
+        elif aggregation == 'count' and x_column:
+            plot_data = df[x_column].value_counts().reset_index()
+            plot_data.columns = [x_column, 'count']
+            y_column = 'count'
+        else:
+            plot_data = df
+        
+        # Normalize chart_type (map old types to frontend-compatible types)
+        chart_type_map = {
+            'hist': 'bar',
+            'count': 'bar',
+            'box': 'bar',
+            'violin': 'bar',
+            'heatmap': 'bar'
+        }
+        normalized_chart_type = chart_type_map.get(chart_type, chart_type)
+        
+        # Special handling for pie charts
+        if normalized_chart_type == 'pie':
+            # Pie charts need aggregated data (categories and values)
+            if aggregation == 'count' or not y_column:
+                # Count occurrences of x_column
+                plot_data = df[x_column].value_counts().reset_index()
+                plot_data.columns = [x_column, 'value']
+                y_column = 'value'
+                print(f"[PIE CHART] Auto-aggregated {x_column} into value counts")
+            else:
+                # Use provided y_column as values
+                # Group by x_column and sum/mean the y_column
+                if aggregation:
+                    plot_data = df.groupby(x_column)[y_column].agg(aggregation).reset_index()
+                    plot_data.columns = [x_column, 'value']
+                    y_column = 'value'
+                else:
+                    # Just select the two columns
+                    plot_data = df[[x_column, y_column]].copy()
+        
+        # Limit data to reasonable size for frontend
+        if len(plot_data) > 100:
+            plot_data = plot_data.head(100)
+            print(f"[WARNING] Data truncated to 100 rows for frontend rendering")
+        
+        # Convert data to list of dictionaries
+        data_records = plot_data.to_dict('records')
+        
+        # Build chart configuration
+        filter_text = f" (filtered: {filter_column}={filter_value})" if filter_column and filter_value else ""
+        chart_config = {
+            "chart_type": normalized_chart_type,
+            "data": data_records,
+            "x_key": x_column,
+            "y_key": y_column,
+            "title": f"{title}{filter_text}",
+            "x_label": x_column,
+            "y_label": y_column or aggregation
+        }
+        
+        result = json.dumps(chart_config)
+        print(f"[TOOL RETURN] Chart config with {len(data_records)} data points")
+        return result
+        
+    except Exception as e:
+        error_msg = f"Error generating chart data: {str(e)}"
+        print(f"[TOOL ERROR] {error_msg}") 
+        import traceback
+        traceback.print_exc()
+        return json.dumps({"error": error_msg})
+
+
 def create_visualization(
     chart_type: str,
     x_column: str = None,
@@ -263,6 +386,60 @@ def create_visualization(
         traceback.print_exc()
         return error_msg
 
+def generate_dashboard(chart_specs: list):
+    """
+    Generate multiple charts at once for dashboard display.
+    
+    Args:
+        chart_specs: List of chart specifications, each containing:
+            - chart_type: 'bar', 'line', 'scatter', 'pie', 'area'
+            - x_column: Column for X-axis
+            - y_column: Column for Y-axis (optional)
+            - title: Chart title
+            - aggregation: 'count', 'sum', 'mean', etc. (optional)
+    
+    Returns:
+        JSON string with array of chart configurations
+    """
+    print(f"[TOOL CALLED] generate_dashboard: {len(chart_specs)} charts requested")
+    
+    charts = []
+    for spec in chart_specs:
+        # Build valid parameters only
+        params = {
+            'chart_type': spec.get('chart_type', 'bar'),
+            'title': spec.get('title', 'Chart')
+        }
+        
+        # Add optional parameters only if they exist
+        if 'x_column' in spec and spec['x_column']:
+            params['x_column'] = spec['x_column']
+        if 'y_column' in spec and spec['y_column']:
+            params['y_column'] = spec['y_column']
+        if 'aggregation' in spec and spec['aggregation']:
+            params['aggregation'] = spec['aggregation']
+        if 'filename' in spec and spec['filename']:
+            params['filename'] = spec['filename']
+        if 'filter_column' in spec and spec['filter_column']:
+            params['filter_column'] = spec['filter_column']
+        if 'filter_value' in spec and spec['filter_value']:
+            params['filter_value'] = spec['filter_value']
+        if 'group_by' in spec and spec['group_by']:
+            params['group_by'] = spec['group_by']
+        
+        # Call generate_chart_data with filtered params
+        result = generate_chart_data(**params)
+        try:
+            chart_config = json.loads(result)
+            if "error" not in chart_config:
+                charts.append(chart_config)
+        except Exception as e:
+            print(f"[ERROR] Failed to parse chart: {e}")
+            pass
+    
+    return json.dumps({"charts": charts})
+
 # Tool definitions for Gemini
 # Tool definitions for Gemini
-tools_list = [create_visualization, get_data_summary, query_knowledge_base]
+tools_list = [generate_dashboard, generate_chart_data, create_visualization, get_data_summary, query_knowledge_base]
+

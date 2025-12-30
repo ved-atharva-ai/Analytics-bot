@@ -4,13 +4,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, Bot, User, Loader2, Trash2, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DashboardMessage from '../components/DashboardMessage';
 
 import { useLanguage } from '../context/LanguageContext';
 
 const ChatInterface = ({ role }) => {
     const { t } = useLanguage();
     const [messages, setMessages] = useState([
-        { role: 'assistant', content: t('welcome_message') }
+        { role: 'assistant', type: 'text', content: t('welcome_message') }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -24,7 +25,32 @@ const ChatInterface = ({ role }) => {
         try {
             const res = await axios.get(`http://localhost:8000/history/${role}`);
             if (res.data.length > 0) {
-                setMessages(res.data);
+                // Parse messages and handle analytics responses
+                const parsedMessages = res.data.map(msg => {
+                    // Check if content is a JSON string (analytics response)
+                    if (msg.role === 'assistant' && msg.content && msg.content.startsWith('{')) {
+                        try {
+                            const dashboardData = JSON.parse(msg.content);
+                            if (dashboardData.type === 'analytics_response') {
+                                return {
+                                    role: 'assistant',
+                                    type: 'analytics',
+                                    content: dashboardData.text || '',
+                                    dashboard: dashboardData
+                                };
+                            }
+                        } catch (e) {
+                            // If parsing fails, treat as regular text
+                            console.warn('Failed to parse analytics response:', e);
+                        }
+                    }
+                    // Regular message
+                    return {
+                        ...msg,
+                        type: msg.type || 'text'
+                    };
+                });
+                setMessages(parsedMessages);
             } else {
                 setMessages([
                     { role: 'assistant', content: t('welcome_message') }
@@ -58,29 +84,58 @@ const ChatInterface = ({ role }) => {
                 role: role
             });
 
-            const botMessage = {
-                role: 'assistant',
-                content: res.data.response,
-                image: res.data.image_url
-            };
+            // Handle both text and analytics responses
+            const responseData = res.data;
+
+            let botMessage;
+            if (responseData.response_type === 'analytics' && responseData.dashboard_data) {
+                // Analytics response with dashboard
+                botMessage = {
+                    role: 'assistant',
+                    type: 'analytics',
+                    content: responseData.response || '',
+                    dashboard: responseData.dashboard_data
+                };
+            } else {
+                // Standard text response
+                botMessage = {
+                    role: 'assistant',
+                    type: 'text',
+                    content: responseData.response,
+                    image: responseData.image_url
+                };
+            }
+
             setMessages(prev => [...prev, botMessage]);
         } catch (err) {
-            setMessages(prev => [...prev, { role: 'assistant', content: t('error_message') }]);
+            setMessages(prev => [...prev, { role: 'assistant', type: 'text', content: t('error_message') }]);
         } finally {
             setLoading(false);
         }
     };
 
+
     const handleNewChat = async () => {
+        console.log('Delete button clicked!');
+        console.log('Current role:', role);
+
         if (window.confirm(t('confirm_new_chat'))) {
+            console.log('User confirmed deletion');
             try {
-                await axios.delete(`http://localhost:8000/history/${role}`);
+                const response = await axios.delete(`http://localhost:8000/history/${role}`);
+                console.log('Delete response:', response.data);
+
                 setMessages([
-                    { role: 'assistant', content: t('welcome_message') }
+                    { role: 'assistant', type: 'text', content: t('welcome_message') }
                 ]);
+                // Show success feedback
+                alert('Chat history cleared successfully!');
             } catch (err) {
                 console.error("Failed to delete history", err);
+                alert('Failed to delete chat history. Please try again.');
             }
+        } else {
+            console.log('User cancelled deletion');
         }
     };
 
@@ -92,10 +147,14 @@ const ChatInterface = ({ role }) => {
                     {t('chat_assistant')}
                 </h2>
                 <button
-                    onClick={handleNewChat}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors"
+                    onClick={() => {
+                        console.log('BUTTON CLICKED - TEST');
+                        handleNewChat();
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors cursor-pointer"
+                    type="button"
                 >
-                    <PlusCircle size={18} />
+                    <Trash2 size={18} />
                     {t('new_chat')}
                 </button>
             </div>
@@ -116,50 +175,60 @@ const ChatInterface = ({ role }) => {
                                 {msg.role === 'assistant' ? <Bot size={20} /> : <User size={20} />}
                             </div>
 
-                            <div className={`flex flex-col gap-2 max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                <div className={`p-4 rounded-2xl ${msg.role === 'assistant'
-                                    ? 'bg-white/10 border border-white/5 text-gray-100'
-                                    : 'bg-blue-600 text-white'
-                                    }`}>
-                                    <div className="prose prose-invert max-w-none">
-                                        <ReactMarkdown
-                                            remarkPlugins={[remarkGfm]}
-                                            components={{
-                                                img: ({ node, ...props }) => {
-                                                    // Construct full URL for images
-                                                    let src = props.src;
-                                                    if (src.startsWith('/')) {
-                                                        src = `http://localhost:8000${src}`;
-                                                    }
-                                                    console.log('Rendering image:', src);
-                                                    return (
-                                                        <img
-                                                            {...props}
-                                                            src={src}
-                                                            className="rounded-lg border border-white/10 mt-2 max-w-full"
-                                                            alt={props.alt || "Generated Chart"}
-                                                            onError={(e) => {
-                                                                console.error('Image failed to load:', src);
-                                                                e.target.style.border = '2px solid red';
-                                                            }}
-                                                            onLoad={() => console.log('Image loaded successfully:', src)}
-                                                        />
-                                                    );
-                                                }
-                                            }}
-                                        >
-                                            {msg.content}
-                                        </ReactMarkdown>
+                            <div className={`flex flex-col gap-2 ${msg.role === 'user' ? 'items-end max-w-[80%]' : 'items-start w-full'}`}>
+                                {msg.type === 'analytics' && msg.dashboard ? (
+                                    // Analytics Dashboard Response
+                                    <div className="w-full">
+                                        <DashboardMessage dashboardData={msg.dashboard} />
                                     </div>
-                                </div>
-                                {msg.image && (
-                                    <motion.img
-                                        initial={{ opacity: 0, scale: 0.9 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        src={`http://localhost:8000${msg.image}`}
-                                        alt="Chart"
-                                        className="rounded-xl border border-white/10 shadow-lg max-w-md"
-                                    />
+                                ) : (
+                                    // Standard Text Response
+                                    <>
+                                        <div className={`p-4 rounded-2xl ${msg.role === 'assistant'
+                                            ? 'bg-white/10 border border-white/5 text-gray-100'
+                                            : 'bg-blue-600 text-white'
+                                            }`}>
+                                            <div className="prose prose-invert max-w-none">
+                                                <ReactMarkdown
+                                                    remarkPlugins={[remarkGfm]}
+                                                    components={{
+                                                        img: ({ node, ...props }) => {
+                                                            // Construct full URL for images
+                                                            let src = props.src;
+                                                            if (src.startsWith('/')) {
+                                                                src = `http://localhost:8000${src}`;
+                                                            }
+                                                            console.log('Rendering image:', src);
+                                                            return (
+                                                                <img
+                                                                    {...props}
+                                                                    src={src}
+                                                                    className="rounded-lg border border-white/10 mt-2 max-w-full"
+                                                                    alt={props.alt || "Generated Chart"}
+                                                                    onError={(e) => {
+                                                                        console.error('Image failed to load:', src);
+                                                                        e.target.style.border = '2px solid red';
+                                                                    }}
+                                                                    onLoad={() => console.log('Image loaded successfully:', src)}
+                                                                />
+                                                            );
+                                                        }
+                                                    }}
+                                                >
+                                                    {msg.content}
+                                                </ReactMarkdown>
+                                            </div>
+                                        </div>
+                                        {msg.image && (
+                                            <motion.img
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                src={`http://localhost:8000${msg.image}`}
+                                                alt="Chart"
+                                                className="rounded-xl border border-white/10 shadow-lg max-w-md"
+                                            />
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </motion.div>
