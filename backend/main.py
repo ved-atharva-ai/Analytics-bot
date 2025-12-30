@@ -124,6 +124,23 @@ tools_openai_format = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_knowledge_base",
+            "description": "Search the knowledge base (uploaded PDFs) for information to answer non-chart related questions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query to find relevant information"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]
 
@@ -133,7 +150,7 @@ async def startup_event():
     """Load all existing CSV/Excel files from static directory into memory"""
     if os.path.exists("static"):
         for filename in os.listdir("static"):
-            if filename.endswith(('.csv', '.xlsx', '.xls')):
+            if filename.endswith(('.csv', '.xlsx', '.xls', '.pdf')):
                 file_path = os.path.join("static", filename)
                 try:
                     load_data(file_path)
@@ -228,12 +245,13 @@ DATA ACCESS:
 VISUALIZATION REQUIREMENTS:
 - For comparisons, trends, distributions, or data analysis → CALL create_visualization tool
 - Available chart types: bar, line, scatter, hist, pie, box, violin, heatmap, area, count
-- Example: To compare groups, use chart_type='bar', x_column='group_column', y_column='value_column', aggregation='mean'
-- For filtering: use filter_column and filter_value parameters
-- For grouping: use group_by parameter
+
+KNOWLEDGE BASE (RAG):
+- For questions about text content, policies, definitions, or general information contained in uploaded PDFs → CALL query_knowledge_base tool
+- Do NOT try to answer from your own training data if the answer might be in the uploaded documents.
 
 RESPONSE FORMAT:
-- First call the tool (if visualization needed)
+- First call the tool (if visualization or info needed)
 - Then write your analysis
 - Include the EXACT image markdown returned by the tool (e.g., ![Chart](/static/charts/uuid.png))
 - Never reference images that don't exist"""
@@ -282,6 +300,9 @@ RESPONSE FORMAT:
                     elif function_name == "get_data_summary":
                         from tools import get_data_summary
                         function_response = get_data_summary()
+                    elif function_name == "query_knowledge_base":
+                        from tools import query_knowledge_base
+                        function_response = query_knowledge_base(**function_args)
                     else:
                         function_response = f"Unknown function: {function_name}"
                     
@@ -384,7 +405,7 @@ def get_files():
     files = []
     if os.path.exists("static"):
         for f in os.listdir("static"):
-            if f.endswith(".csv") or f.endswith(".xlsx") or f.endswith(".xls"):
+            if f.endswith((".csv", ".xlsx", ".xls", ".pdf")):
                 files.append(f)
     return files
 

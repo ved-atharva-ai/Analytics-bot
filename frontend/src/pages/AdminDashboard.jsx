@@ -3,7 +3,10 @@ import axios from 'axios';
 import { Upload, FileText, Users, CheckCircle, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+import { useLanguage } from '../context/LanguageContext';
+
 const AdminDashboard = () => {
+    const { t } = useLanguage();
     const [file, setFile] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [status, setStatus] = useState(null);
@@ -37,7 +40,7 @@ const AdminDashboard = () => {
             // Trigger refresh of data preview
             window.dispatchEvent(new Event('fileUploaded'));
         } catch (err) {
-            setStatus({ type: 'error', message: 'Upload failed. Please try again.' });
+            setStatus({ type: 'error', message: t('error_message') });
         } finally {
             setUploading(false);
         }
@@ -56,13 +59,13 @@ const AdminDashboard = () => {
                         <div className="p-3 bg-blue-500/20 rounded-xl text-blue-400">
                             <Upload size={24} />
                         </div>
-                        <h2 className="text-2xl font-bold">Data Upload</h2>
+                        <h2 className="text-2xl font-bold">{t('data_upload')}</h2>
                     </div>
 
                     <div className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center hover:border-blue-500/50 transition-colors">
                         <input
                             type="file"
-                            accept=".csv,.xlsx,.xls"
+                            accept=".csv,.xlsx,.xls,.pdf"
                             onChange={handleFileChange}
                             className="hidden"
                             id="file-upload"
@@ -70,8 +73,8 @@ const AdminDashboard = () => {
                         <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center gap-4">
                             <FileText size={48} className="text-gray-500" />
                             <div className="text-gray-400">
-                                <span className="text-blue-400 font-medium">Click to upload</span> or drag and drop
-                                <p className="text-sm mt-1">CSV, Excel files supported</p>
+                                <span className="text-blue-400 font-medium">{t('click_to_upload')}</span> {t('drag_and_drop')}
+                                <p className="text-sm mt-1">{t('supported_files')}</p>
                             </div>
                         </label>
                     </div>
@@ -84,7 +87,7 @@ const AdminDashboard = () => {
                                 disabled={uploading}
                                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                             >
-                                {uploading ? 'Uploading...' : 'Upload Data'}
+                                {uploading ? t('uploading') : t('upload_data')}
                             </button>
                         </div>
                     )}
@@ -108,7 +111,7 @@ const AdminDashboard = () => {
                         <div className="p-3 bg-purple-500/20 rounded-xl text-purple-400">
                             <Users size={24} />
                         </div>
-                        <h2 className="text-2xl font-bold">Active Users</h2>
+                        <h2 className="text-2xl font-bold">{t('active_users')}</h2>
                     </div>
 
                     <div className="space-y-4">
@@ -137,6 +140,7 @@ const AdminDashboard = () => {
 };
 
 const DataPreview = () => {
+    const { t } = useLanguage();
     const [data, setData] = useState(null);
     const [files, setFiles] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null);
@@ -184,7 +188,7 @@ const DataPreview = () => {
                 <div className="md:col-span-1 border-r border-white/10 pr-8">
                     <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                         <FileText size={20} className="text-blue-400" />
-                        Uploaded Files
+                        {t('uploaded_files')}
                     </h3>
                     <div className="space-y-2">
                         {files.length > 0 ? files.map((f, i) => (
@@ -192,19 +196,19 @@ const DataPreview = () => {
                                 key={i}
                                 onClick={() => setSelectedFile(f)}
                                 className={`p-3 rounded-lg text-sm truncate cursor-pointer transition-colors ${selectedFile === f
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white/5 text-gray-300 hover:bg-white/10'
                                     }`}
                             >
                                 {f}
                             </div>
-                        )) : <p className="text-gray-500 text-sm">No files uploaded</p>}
+                        )) : <p className="text-gray-500 text-sm">{t('no_files')}</p>}
                     </div>
                 </div>
 
                 <div className="md:col-span-2">
                     <h3 className="text-xl font-bold mb-4">
-                        Preview: <span className="text-blue-400">{selectedFile || 'None'}</span>
+                        {t('preview')}: <span className="text-blue-400">{selectedFile || 'None'}</span>
                     </h3>
                     {data && data.filename === selectedFile ? (
                         <div className="overflow-x-auto">
@@ -226,11 +230,11 @@ const DataPreview = () => {
                                     ))}
                                 </tbody>
                             </table>
-                            <p className="mt-4 text-xs text-gray-500">Showing first 10 rows of {data.total_rows} total rows</p>
+                            <p className="mt-4 text-xs text-gray-500">{t('showing_rows').replace('{total}', data.total_rows)}</p>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-40 text-gray-500">
-                            <p>Select a file to preview data.</p>
+                            <p>{t('select_file')}</p>
                         </div>
                     )}
                 </div>

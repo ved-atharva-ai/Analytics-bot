@@ -6,6 +6,8 @@ import seaborn as sns
 import json
 import os
 import uuid
+import pypdf
+import re
 
 STATIC_DIR = "static/charts"
 os.makedirs(STATIC_DIR, exist_ok=True)
@@ -13,24 +15,93 @@ os.makedirs(STATIC_DIR, exist_ok=True)
 # Global dictionary to hold loaded dataframes
 # Key: filename, Value: DataFrame
 dataframes = {}
+# Global list to hold text chunks for RAG
+# Each item: {"text": str, "source": str, "page": int}
+knowledge_base = []
 active_file = None
 
 def load_data(file_path):
-    global dataframes, active_file
+    global dataframes, active_file, knowledge_base
     filename = os.path.basename(file_path)
     try:
         if file_path.endswith('.csv'):
             df = pd.read_csv(file_path)
+            dataframes[filename] = df
+            active_file = filename
+            return f"Data loaded successfully. File '{filename}' is now active."
         elif file_path.endswith('.xlsx') or file_path.endswith('.xls'):
             df = pd.read_excel(file_path)
+            dataframes[filename] = df
+            active_file = filename
+            return f"Data loaded successfully. File '{filename}' is now active."
+        elif file_path.endswith('.pdf'):
+            return load_pdf(file_path)
         else:
             return "Unsupported file format."
-        
-        dataframes[filename] = df
-        active_file = filename
-        return f"Data loaded successfully. File '{filename}' is now active."
     except Exception as e:
         return f"Error loading data: {str(e)}"
+
+def load_pdf(file_path):
+    global knowledge_base
+    filename = os.path.basename(file_path)
+    try:
+        reader = pypdf.PdfReader(file_path)
+        text_chunks = []
+        
+        for i, page in enumerate(reader.pages):
+            text = page.extract_text()
+            if text:
+                # Simple chunking by paragraphs or fixed size
+                # Here we just split by double newlines for paragraphs
+                paragraphs = text.split('\n\n')
+                for para in paragraphs:
+                    if len(para.strip()) > 50:  # Ignore very short chunks
+                        knowledge_base.append({
+                            "text": para.strip(),
+                            "source": filename,
+                            "page": i + 1
+                        })
+        
+        return f"PDF loaded successfully. Extracted {len(knowledge_base)} text chunks from '{filename}'."
+    except Exception as e:
+        return f"Error loading PDF: {str(e)}"
+
+def query_knowledge_base(query: str):
+    """
+    Search the knowledge base for relevant text chunks based on the query.
+    Uses simple keyword matching.
+    """
+    print(f"[TOOL CALLED] query_knowledge_base: query='{query}'")
+    global knowledge_base
+    
+    if not knowledge_base:
+        return "Knowledge base is empty. Please upload a PDF file first."
+    
+    # Simple keyword scoring
+    query_terms = set(re.findall(r'\w+', query.lower()))
+    scored_chunks = []
+    
+    for chunk in knowledge_base:
+        chunk_text = chunk['text'].lower()
+        score = sum(1 for term in query_terms if term in chunk_text)
+        if score > 0:
+            scored_chunks.append((score, chunk))
+    
+    # Sort by score descending
+    scored_chunks.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5 chunks
+    top_chunks = scored_chunks[:5]
+    
+    if not top_chunks:
+        return "No relevant information found in the uploaded documents."
+    
+    result = "Found relevant information:\n\n"
+    for score, chunk in top_chunks:
+        result += f"--- From {chunk['source']} (Page {chunk['page']}) ---\n"
+        result += f"{chunk['text']}\n\n"
+        
+    return result
 
 def get_data_summary():
     global dataframes
@@ -193,4 +264,5 @@ def create_visualization(
         return error_msg
 
 # Tool definitions for Gemini
-tools_list = [create_visualization, get_data_summary]
+# Tool definitions for Gemini
+tools_list = [create_visualization, get_data_summary, query_knowledge_base]

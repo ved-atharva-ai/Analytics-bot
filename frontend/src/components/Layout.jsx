@@ -3,12 +3,16 @@ import { Link, useLocation } from 'react-router-dom';
 import { MessageSquare, Upload, User, Settings, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+import { useLanguage } from '../context/LanguageContext';
+import { Globe } from 'lucide-react';
+
 const Layout = ({ children, role }) => {
     const location = useLocation();
+    const { t, language, toggleLanguage } = useLanguage();
 
     const navItems = [
-        { path: '/chat', icon: MessageSquare, label: 'Chat' },
-        { path: '/admin', icon: Upload, label: 'Admin Dashboard' },
+        { path: '/chat', icon: MessageSquare, label: t('chat') },
+        { path: '/admin', icon: Upload, label: t('admin_dashboard') },
     ];
 
     return (
@@ -24,7 +28,7 @@ const Layout = ({ children, role }) => {
                         <span className="font-bold text-xl">A</span>
                     </div>
                     <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
-                        AnalyticBot
+                        {t('app_name')}
                     </h1>
                 </div>
 
@@ -44,14 +48,23 @@ const Layout = ({ children, role }) => {
                     ))}
                 </nav>
 
-                <div className="mt-auto pt-6 border-t border-white/10">
+                <div className="mt-auto pt-6 border-t border-white/10 space-y-4">
+                    {/* Language Toggle */}
+                    <button
+                        onClick={toggleLanguage}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-gray-300"
+                    >
+                        <Globe size={20} />
+                        <span className="font-medium">{language === 'en' ? 'English' : 'العربية'}</span>
+                    </button>
+
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">
                                 <User size={16} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">Admin User</p>
+                                <p className="text-sm font-medium">{t('admin_user')}</p>
                             </div>
                         </div>
                         <Settings size={16} className="text-gray-400 cursor-pointer hover:text-white" />

@@ -5,9 +5,12 @@ import remarkGfm from 'remark-gfm';
 import { Send, Bot, User, Loader2, Trash2, PlusCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { useLanguage } from '../context/LanguageContext';
+
 const ChatInterface = ({ role }) => {
+    const { t } = useLanguage();
     const [messages, setMessages] = useState([
-        { role: 'assistant', content: `Hello! I'm your Data Assistant. How can I help you visualize your data today?` }
+        { role: 'assistant', content: t('welcome_message') }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -24,7 +27,7 @@ const ChatInterface = ({ role }) => {
                 setMessages(res.data);
             } else {
                 setMessages([
-                    { role: 'assistant', content: `Hello! I'm your Data Assistant. How can I help you visualize your data today?` }
+                    { role: 'assistant', content: t('welcome_message') }
                 ]);
             }
         } catch (err) {
@@ -62,18 +65,18 @@ const ChatInterface = ({ role }) => {
             };
             setMessages(prev => [...prev, botMessage]);
         } catch (err) {
-            setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I encountered an error processing your request." }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: t('error_message') }]);
         } finally {
             setLoading(false);
         }
     };
 
     const handleNewChat = async () => {
-        if (window.confirm('Are you sure you want to start a new chat? This will clear all history.')) {
+        if (window.confirm(t('confirm_new_chat'))) {
             try {
                 await axios.delete(`http://localhost:8000/history/${role}`);
                 setMessages([
-                    { role: 'assistant', content: `Hello! I'm your Data Assistant. How can I help you visualize your data today?` }
+                    { role: 'assistant', content: t('welcome_message') }
                 ]);
             } catch (err) {
                 console.error("Failed to delete history", err);
@@ -86,14 +89,14 @@ const ChatInterface = ({ role }) => {
             {/* Header with New Chat button */}
             <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
                 <h2 className="text-xl font-bold text-gray-300">
-                    Chat Assistant
+                    {t('chat_assistant')}
                 </h2>
                 <button
                     onClick={handleNewChat}
                     className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors"
                 >
                     <PlusCircle size={18} />
-                    New Chat
+                    {t('new_chat')}
                 </button>
             </div>
 
@@ -174,7 +177,7 @@ const ChatInterface = ({ role }) => {
                         </div>
                         <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-center gap-3">
                             <Loader2 size={18} className="animate-spin text-blue-400" />
-                            <span className="text-sm text-gray-400">Analyzing data...</span>
+                            <span className="text-sm text-gray-400">{t('analyzing')}</span>
                         </div>
                     </motion.div>
                 )}
@@ -187,7 +190,7 @@ const ChatInterface = ({ role }) => {
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Ask about your data..."
+                        placeholder={t('ask_placeholder')}
                         className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-6 pr-14 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:bg-white/10 transition-all"
                     />
                     <button
