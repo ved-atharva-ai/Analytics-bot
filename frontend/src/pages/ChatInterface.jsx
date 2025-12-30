@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const ChatInterface = ({ role }) => {
     const [messages, setMessages] = useState([
-        { role: 'assistant', content: `Hello! I'm your ${role === 'admin' ? 'Admin' : 'Data'} Assistant. How can I help you visualize your data today?` }
+        { role: 'assistant', content: `Hello! I'm your Data Assistant. How can I help you visualize your data today?` }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ const ChatInterface = ({ role }) => {
                 setMessages(res.data);
             } else {
                 setMessages([
-                    { role: 'assistant', content: `Hello! I'm your ${role === 'admin' ? 'Admin' : 'Data'} Assistant. How can I help you visualize your data today?` }
+                    { role: 'assistant', content: `Hello! I'm your Data Assistant. How can I help you visualize your data today?` }
                 ]);
             }
         } catch (err) {
@@ -73,7 +73,7 @@ const ChatInterface = ({ role }) => {
             try {
                 await axios.delete(`http://localhost:8000/history/${role}`);
                 setMessages([
-                    { role: 'assistant', content: `Hello! I'm your ${role === 'admin' ? 'Admin' : 'Data'} Assistant. How can I help you visualize your data today?` }
+                    { role: 'assistant', content: `Hello! I'm your Data Assistant. How can I help you visualize your data today?` }
                 ]);
             } catch (err) {
                 console.error("Failed to delete history", err);
@@ -86,7 +86,7 @@ const ChatInterface = ({ role }) => {
             {/* Header with New Chat button */}
             <div className="flex justify-between items-center mb-4 pb-4 border-b border-white/10">
                 <h2 className="text-xl font-bold text-gray-300">
-                    {role === 'admin' ? 'Admin' : 'User'} Chat
+                    Chat Assistant
                 </h2>
                 <button
                     onClick={handleNewChat}
@@ -123,11 +123,24 @@ const ChatInterface = ({ role }) => {
                                             remarkPlugins={[remarkGfm]}
                                             components={{
                                                 img: ({ node, ...props }) => {
-                                                    const src = props.src.startsWith('/')
-                                                        ? `http://localhost:8000${props.src}`
-                                                        : props.src;
+                                                    // Construct full URL for images
+                                                    let src = props.src;
+                                                    if (src.startsWith('/')) {
+                                                        src = `http://localhost:8000${src}`;
+                                                    }
+                                                    console.log('Rendering image:', src);
                                                     return (
-                                                        <img {...props} src={src} className="rounded-lg border border-white/10 mt-2 max-w-full" alt="Generated Chart" />
+                                                        <img
+                                                            {...props}
+                                                            src={src}
+                                                            className="rounded-lg border border-white/10 mt-2 max-w-full"
+                                                            alt={props.alt || "Generated Chart"}
+                                                            onError={(e) => {
+                                                                console.error('Image failed to load:', src);
+                                                                e.target.style.border = '2px solid red';
+                                                            }}
+                                                            onLoad={() => console.log('Image loaded successfully:', src)}
+                                                        />
                                                     );
                                                 }
                                             }}

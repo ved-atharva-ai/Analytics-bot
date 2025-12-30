@@ -100,12 +100,19 @@ cd ..
 
 ### Option 1: Using the Run Script (Recommended)
 
+**Linux/Mac:**
 ```bash
 # Make the script executable (first time only)
 chmod +x run_app.sh
 
 # Run the application
 ./run_app.sh
+```
+
+**Windows:**
+Double-click `run_app.bat` or run it from the command line:
+```cmd
+run_app.bat
 ```
 
 This will start both the backend (port 8000) and frontend (port 5173).

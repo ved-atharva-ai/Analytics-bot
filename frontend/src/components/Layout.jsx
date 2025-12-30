@@ -3,12 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { MessageSquare, Upload, User, Settings, LogOut } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const Layout = ({ children, role, setRole }) => {
+const Layout = ({ children, role }) => {
     const location = useLocation();
 
     const navItems = [
         { path: '/chat', icon: MessageSquare, label: 'Chat' },
-        ...(role === 'admin' ? [{ path: '/admin', icon: Upload, label: 'Admin Dashboard' }] : []),
+        { path: '/admin', icon: Upload, label: 'Admin Dashboard' },
     ];
 
     return (
@@ -34,8 +34,8 @@ const Layout = ({ children, role, setRole }) => {
                             key={item.path}
                             to={item.path}
                             className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${location.pathname === item.path
-                                    ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 text-blue-400'
-                                    : 'hover:bg-white/5 text-gray-400 hover:text-white'
+                                ? 'bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 text-blue-400'
+                                : 'hover:bg-white/5 text-gray-400 hover:text-white'
                                 }`}
                         >
                             <item.icon size={20} />
@@ -51,13 +51,7 @@ const Layout = ({ children, role, setRole }) => {
                                 <User size={16} />
                             </div>
                             <div>
-                                <p className="text-sm font-medium">{role === 'admin' ? 'Admin User' : 'Standard User'}</p>
-                                <button
-                                    onClick={() => setRole(role === 'admin' ? 'user' : 'admin')}
-                                    className="text-xs text-blue-400 hover:text-blue-300"
-                                >
-                                    Switch Role
-                                </button>
+                                <p className="text-sm font-medium">Admin User</p>
                             </div>
                         </div>
                         <Settings size={16} className="text-gray-400 cursor-pointer hover:text-white" />
